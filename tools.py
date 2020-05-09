@@ -69,7 +69,7 @@ def CreateMaterialGeneric(self, context):
 	# normals
 	texture = mat_nodes.new('ShaderNodeTexImage')
 	texture.name = "Normals"
-	texture.location = (-1000, -600)
+	texture.location = (-1400, -600)
 	texture.use_custom_color = True
 	texture.color = (0.272209, 0.608, 0.378043)
 
@@ -80,10 +80,28 @@ def CreateMaterialGeneric(self, context):
 	texture.image = bpy.data.images.get(tex_name)
 	texture.image.colorspace_settings.name = 'Non-Color'
 
+	sep = mat_nodes.new("ShaderNodeSeparateRGB")
+	sep.location = (-1100, -650)
+	sep.hide = True
+	comb = mat_nodes.new("ShaderNodeCombineRGB")
+	comb.location = (-800, -650)
+	comb.hide = True
+	maths = mat_nodes.new("ShaderNodeMath")
+	maths.operation = 'SUBTRACT'
+	maths.inputs[0].default_value = 1
+	maths.location = (-950, -600)
+	maths.hide = True
+	mat_links.new(texture.outputs['Color'], sep.inputs['Image'])
+	mat_links.new(sep.outputs['R'], comb.inputs[0])
+	mat_links.new(sep.outputs['G'], maths.inputs[1])
+	mat_links.new(sep.outputs['B'], comb.inputs[2])
+	mat_links.new(maths.outputs['Value'], comb.inputs[1])
+
+
 	normalmap = mat_nodes.new("ShaderNodeNormalMap")
-	normalmap.location = (-700, -600)
+	normalmap.location = (-600, -500)
 	normalmap.uv_map = "UVMap"
-	mat_links.new(texture.outputs['Color'], normalmap.inputs['Color'])
+	mat_links.new(comb.outputs['Image'], normalmap.inputs['Color'])
 	mat_links.new(normalmap.outputs['Normal'], bsdf.inputs['Normal'])
 
 
