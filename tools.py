@@ -5,24 +5,189 @@ from bpy_extras.object_utils import AddObjectHelper, object_data_add
 from mathutils import Vector
 
 
+# -----------------------------------------------------------------------------------------
+# Utils.
+# -----------------------------------------------------------------------------------------
+def GetDefaultTexFolder():
+	import os
+	import sys
+	file_path = os.path.dirname(os.path.abspath(__file__))
+	textures_path = os.path.join(file_path, "default_tex") + "\\"
+
+	return textures_path
+
+# -----------------------------------------------------------------------------------------
+# Materials from xml.
+# -----------------------------------------------------------------------------------------
+import sys
+sys.path.append("c:/GITs/MigrateCryAssetsToUnigine/")
+
+import def_globals
+
+
+def GetXmlMat(ref_path):
+	import os
+	import xml.etree.ElementTree as ET
+
+	materials = []
+
+	mat_tree = ET.parse(def_globals.MATERIALS_XML)
+	mat_root = mat_tree.getroot()
+
+	for mat in mat_root.iter('Material'):
+		path_mat = def_globals.xml_get(mat, "mtl_file").lower().replace("/", "\\")
+		if (ref_path == path_mat):
+			# print("Found mat: " + xml_get(mat, "mtl_file"))
+			materials.append(mat)
+
+	return materials
+
+
+def AssignTexture(node, tex_type, tex_path):
+	import os
+
+	def UpdateTextureNode(texture_path):
+		texture_name = os.path.split(texture_path)[1]
+
+		if (os.path.exists(texture_path)):
+			if (bpy.data.images.get(texture_name) == None): bpy.data.images.load(filepath = texture_path)
+			
+			node.image = bpy.data.images.get(texture_name)
+			node.image.update()
+
+		pass
+
+	texture_path = os.path.join(def_globals.DESTINATION_ASSETS_PATH, tex_path)
+
+	if (node.name == "Albedo" and tex_type == "Diffuse"):
+		UpdateTextureNode(texture_path)
+	
+	if (node.name == "Normals" and tex_type == "Bumpmap"):
+		UpdateTextureNode(texture_path)
+
+	if (node.name == "Shading" and tex_type == "Diffuse"):
+		# found shading by albedo texture name.
+		texture_path = texture_path.replace("_alb", "_sh")
+		UpdateTextureNode(texture_path)
+		
+
+
+
+def AddTexturesToMaterials(mat, textures):
+	print("------------------------------------------------")
+	mat_nodes = mat.node_tree.nodes
+
+	for n in mat_nodes:
+		for tex in textures:
+			AssignTexture(n, tex[0], tex[1])
+
+	pass
+
+
+def CreateMaterialsFromXml(self, context, materials):
+
+	PROJECT_DIR = def_globals.DESTINATION_ASSETS_PATH
+
+	import os
+	import xml.etree.ElementTree as ET
+
+	for mat in materials:
+		mat_name = def_globals.xml_get(mat, "name")
+		textures = []
+
+		for tex in mat.iter('Texture'):
+			texture_path_orig = def_globals.xml_get(tex, "file")
+			
+			texture_path = os.path.split(texture_path_orig)[0]
+			texture_name = os.path.split(texture_path_orig)[1]
+			
+			texture_name = texture_name.replace(".tif", "").replace(".tga", "")
+			texture_name = def_globals.convert_suffixes_to_unigine(texture_name)
+			texture_name = texture_name + ".tga"
+
+			tex = [def_globals.xml_get(tex, "map"), texture_path + "\\" + texture_name]
+			textures.append(tex)
+		
+		new_mat = CreateMaterialGeneric(self, context, mat_name)
+		AddTexturesToMaterials(new_mat, textures)
+
+	pass
+
+
+def RecreateMaterialFromXml(self, context):
+	'''
+
+	'''
+	import os
+	import xml.etree.ElementTree as ET
+
+	active_obj = bpy.context.active_object
+	mat = active_obj.active_material
+
+	blend_folder = os.path.dirname(bpy.data.filepath)
+
+	materials = []
+
+	tree = ET.parse(def_globals.MODELS_XML)
+	root = tree.getroot()
+
+	for mod in root.iter('Model'):
+		path_model = def_globals.xml_get(mod, "path")
+		path_mat = def_globals.xml_get(mod, "mtl_path").lower().replace("/", "\\")
+
+		path = os.path.split(path_model)[0]
+		name = os.path.split(path_model)[1]
+
+		if (not path in blend_folder): continue
+		
+		for collection in bpy.data.collections:
+			for obj in collection.objects:
+				if (active_obj != obj): continue
+				
+				for obj in collection.objects:
+					if (obj.name.startswith("_export_")): # find exporter helper
+						materials = GetXmlMat(path_mat)
+						break
+
+	# create materials.
+	CreateMaterialsFromXml(self, context, materials)
+
+	pass
+
+
+class UNIGINETOOLS_OT_RecreateMaterialFromXml(bpy.types.Operator):
+	bl_label = "Recreate material from xml"
+	bl_idname = "uniginetools.recreate_material_from_xml"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		RecreateMaterialFromXml(self, context)
+		
+		self.report({'INFO'}, "recreated")
+
+		return {'FINISHED'}
+
 
 # -----------------------------------------------------------------------------------------
 # Materials.
 # -----------------------------------------------------------------------------------------
-def CreateMaterialGeneric(self, context):
+def CreateMaterialGeneric(self, context, name = ""):
 	'''
 	Find material by name or create.
 	Create material node tree.
 	'''
 
 	import os
-	import sys
-	file_path = os.path.dirname(os.path.abspath(__file__))
-	textures_path = os.path.join(file_path, "default_tex") + "\\"
+
+	textures_path = GetDefaultTexFolder()
 
 	obj = bpy.context.active_object
-	mat = obj.active_material
-	print("Materials: " + str(mat))
+	
+	mat = None
+	if (name == ""):
+		mat = obj.active_material
+	else:
+		mat = bpy.data.materials.get(name)	
 
 	if (mat is None):
 		# create new material
@@ -134,7 +299,7 @@ def CreateMaterialGeneric(self, context):
 	mat_links.new(sep_rgb.outputs['G'], maths.inputs[1])
 	mat_links.new(maths.outputs['Value'], bsdf.inputs['Roughness'])
 
-	pass
+	return mat
 
 
 class UNIGINETOOLS_OT_CreateMaterialGeneric(bpy.types.Operator):
@@ -170,13 +335,80 @@ class UNIGINETOOLS_CreateMaterials(bpy.types.Menu):
 # Nodes.
 # -----------------------------------------------------------------------------------------
 
+# -----------------------------------------------------------------------------------------
+# UI Layout.
+# -----------------------------------------------------------------------------------------
+def BlenderDefaultUI(self, context):
+
+	# workspace
+	blend_path = GetDefaultTexFolder() + "default_workspaces.blend"
+
+	bpy.ops.workspace.append_activate(idname = "Animation", filepath = blend_path)
+
+	workspaces = [ws for ws in bpy.data.workspaces if ws != context.workspace]
+	bpy.data.batch_remove(ids=workspaces)
+
+	if (bpy.data.workspaces.get("Animation") is None):
+		bpy.ops.workspace.append_activate(idname = "Animation", filepath = blend_path)
+	if (bpy.data.workspaces.get("Shading") is None):
+		bpy.ops.workspace.append_activate(idname = "Shading", filepath = blend_path)
+	if (bpy.data.workspaces.get("UV Editing") is None):
+		bpy.ops.workspace.append_activate(idname = "UV Editing", filepath = blend_path)
+	if (bpy.data.workspaces.get("Modeling") is None):
+		bpy.ops.workspace.append_activate(idname = "Modeling", filepath = blend_path)
+	if (bpy.data.workspaces.get("Layout") is None):
+		bpy.ops.workspace.append_activate(idname = "Layout", filepath = blend_path)
+
+
+	
+	bpy.context.window.workspace = bpy.data.workspaces['Modeling']
+	bpy.data.workspaces.update()
+
+
+	for area in bpy.data.workspaces['Modeling'].screens[0].areas:
+		if area.type == 'OUTLINER':
+			for spaces in area.spaces:
+				if spaces.type == 'OUTLINER':
+					# outliner window settings
+					area.spaces.active.show_restrict_column_select = True
+					area.spaces.active.show_restrict_column_viewport = False
+					area.spaces.active.show_restrict_column_hide = True
+					
+		if area.type == 'VIEW_3D':
+			# viewport window settings
+			area.spaces.active.show_gizmo_navigate = False
+			area.spaces.active.overlay.show_floor = False
+			area.spaces.active.overlay.show_axis_x = False
+			area.spaces.active.overlay.show_axis_y = False
+			area.spaces.active.overlay.show_axis_z = False
+
+
+	# properties window settings
+	# bpy.context.space_data.context = 'SCENE'
+
+	pass
+
+class UNIGINETOOLS_OT_CreateDefaultUILayout(bpy.types.Operator):
+	bl_label = "Default ui layout."
+	bl_idname = "uniginetools.create_default_ui_layout"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		BlenderDefaultUI(self, context)
+		
+		self.report({'INFO'}, "default layout")
+
+		return {'FINISHED'}
+
 
 # -----------------------------------------------------------------------------------------
 # Register/Unregister.
 # -----------------------------------------------------------------------------------------
 classes = (
+	UNIGINETOOLS_OT_RecreateMaterialFromXml,
 	UNIGINETOOLS_OT_CreateMaterialGeneric,
 	UNIGINETOOLS_CreateMaterials,
+	UNIGINETOOLS_OT_CreateDefaultUILayout,
 )
 
 def materials_menu(self, context):

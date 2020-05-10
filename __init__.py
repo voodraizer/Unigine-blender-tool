@@ -27,8 +27,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Support 'reload' case.
 if "bpy" in locals():
 	import importlib
-	if "tools" in locals():
-		importlib.reload(tools)
+	if "tools" in locals(): importlib.reload(tools)
 
 
 
@@ -46,6 +45,14 @@ class Addon_UI(bpy.types.Panel):
 	
 	def draw(self, context):
 		scene = context.scene
+
+		layout = self.layout
+		layout.separator()
+
+		col = layout.column(align=True)
+		row = col.split(factor = 0.5)
+		row.operator(tools.UNIGINETOOLS_OT_CreateDefaultUILayout.bl_idname, text="Default UI")
+		row.operator(tools.UNIGINETOOLS_OT_RecreateMaterialFromXml.bl_idname, text="Recreate mats")
 
 		pass
 

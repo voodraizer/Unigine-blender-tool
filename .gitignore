@@ -2,6 +2,7 @@
 __DOCS/
 __pycache__/
 
+**/*.blend1
 
 Unigine_blender_tool.code-workspace
 
