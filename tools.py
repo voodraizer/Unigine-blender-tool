@@ -4,11 +4,13 @@ from bpy.props import FloatVectorProperty
 from bpy_extras.object_utils import AddObjectHelper, object_data_add
 from mathutils import Vector
 
-
 # -----------------------------------------------------------------------------------------
 # Utils.
 # -----------------------------------------------------------------------------------------
 def GetDefaultTexFolder():
+	'''
+	Get default textures for addon.
+	'''
 	import os
 	import sys
 	file_path = os.path.dirname(os.path.abspath(__file__))
@@ -16,162 +18,169 @@ def GetDefaultTexFolder():
 
 	return textures_path
 
+
 # -----------------------------------------------------------------------------------------
-# Materials from xml.
+# Create unigine materials.
 # -----------------------------------------------------------------------------------------
-import sys
-sys.path.append("c:/GITs/MigrateCryAssetsToUnigine/")
+def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
+	'''
+	Create unigine material and link existing textures.
+	'''
 
-import def_globals
+	def GetPathFromImage(image):
+		image_path = image.filepath
+		
+		if ("default_n.tga" in image_path or "default_sh.tga" in image_path or "default_n.tga" in image_path):
+			return None
 
+		if (image_path.startswith("//..\..\..\Textures")):
+			image_path = (image_path[image_path.find("Textures"):]).replace("\\", "/")
+		if (image_path.startswith("//")):
+			image_path = os.path.join(rel_blend_folder, image_path[2:]).replace("\\", "/")
+		
+		return image_path
 
-def GetXmlMat(ref_path):
-	import os
 	import xml.etree.ElementTree as ET
-
-	materials = []
-
-	mat_tree = ET.parse(def_globals.MATERIALS_XML)
-	mat_root = mat_tree.getroot()
-
-	for mat in mat_root.iter('Material'):
-		path_mat = def_globals.xml_get(mat, "mtl_file").lower().replace("/", "\\")
-		if (ref_path == path_mat):
-			# print("Found mat: " + xml_get(mat, "mtl_file"))
-			materials.append(mat)
-
-	return materials
-
-
-def AssignTexture(node, tex_type, tex_path):
 	import os
+	import uuid
+	import hashlib
 
-	def UpdateTextureNode(texture_path):
-		texture_name = os.path.split(texture_path)[1]
+	# <?xml version="1.0" encoding="utf-8"?>
 
-		if (os.path.exists(texture_path)):
-			if (bpy.data.images.get(texture_name) == None): bpy.data.images.load(filepath = texture_path)
-			
-			node.image = bpy.data.images.get(texture_name)
-			node.image.update()
+	xml_root = ET.Element('material')
+	xml_root.set('version', "2.11.0.0")
+	xml_root.set('name', mat_name)
 
-		pass
+	mat_rel_path = mat_file_path[mat_file_path.find("models"):]
+	unigine_uuid = hashlib.sha1(mat_rel_path.encode('utf-8'))
+	xml_root.set('guid', unigine_uuid.hexdigest())
+	# print("==================================================")
+	# print(unigine_uuid.hexdigest())
+	# print(unigine_mat_path)
+	# print("==================================================")
 
-	texture_path = os.path.join(def_globals.DESTINATION_ASSETS_PATH, tex_path)
-
-	if (node.name == "Albedo" and tex_type == "Diffuse"):
-		UpdateTextureNode(texture_path)
+	# material base type.
+	# if (mat_shader == "Illum"):
+	xml_root.set('base_material', "mesh_base")
 	
-	if (node.name == "Normals" and tex_type == "Bumpmap"):
-		UpdateTextureNode(texture_path)
+	# textures.
+	xml_child = ET.SubElement(xml_root, 'texture')
+	xml_child.set('name', "albedo")
+	albedo = mat.node_tree.nodes.get("Albedo")
+	if (not albedo is None):
+		# albedo
+		image_path = GetPathFromImage(albedo.image)
+		if (image_path):
+			xml_child.text = image_path
+		else:
+			# xml_child.text = "guid://5219d6ddb5dbd1520e843a369ad2b64326bb24e2"	# white texture from core/textures/common/
+			xml_child.text = "Textures/cry_missing/pink_alb.tga"
 
-	if (node.name == "Shading" and tex_type == "Diffuse"):
-		# found shading by albedo texture name.
-		texture_path = texture_path.replace("_alb", "_sh")
-		UpdateTextureNode(texture_path)
+
+	xml_child = ET.SubElement(xml_root, 'texture')
+	xml_child.set('name', "normal")
+	normals = mat.node_tree.nodes.get("Normals")
+	if (not normals is None):
+		# normal map
+		image_path = GetPathFromImage(normals.image)
+		if (image_path):
+			xml_child.text = image_path
+		else:
+			# xml_child.text = "guid://692dbb7d56d633e22551bd47f4d92cd2d498270d" # default normal
+			xml_child.text = "Textures/cry_missing/normal_n.tga"
+
+	
+	xml_child = ET.SubElement(xml_root, 'texture')
+	xml_child.set('name', "shading")
+	shading = mat.node_tree.nodes.get("Shading")
+	if (not shading is None):
+		# shading map
+		image_path = GetPathFromImage(shading.image)
+		if (image_path):
+			xml_child.text = image_path
+		else:
+			xml_child.text = "Textures/cry_missing/normal_sh.tga"
+	
+
+	# Parameters.
+	xml_child = ET.SubElement(xml_root, 'parameter')
+	xml_child.text = "1"
+	xml_child.set('name', "metalness")
+	xml_child.set('expression', "0")
+
+
+	xml_child = ET.SubElement(xml_root, 'parameter')
+	xml_child.text = "1 1 1 1"
+	xml_child.set('name', "specular_color")
+	xml_child.set('expression', "0")
+
+
+	xml_child = ET.SubElement(xml_root, 'parameter')
+	xml_child.text = "1"
+	xml_child.set('name', "gloss")
+	xml_child.set('expression', "0")
+
+	if (not albedo is None and albedo.outputs["Alpha"].links):
+		# Alpha test.
+		xml_child = ET.SubElement(xml_root, 'options')
+		xml_child.set('transparent', "1")
 		
+		xml_child = ET.SubElement(xml_root, 'parameter')
+		xml_child.text = "1.3"
+		xml_child.set('name', "transparent")
+		xml_child.set('expression', "0")
 
 
+	print("==================================================")
+	print(def_globals.xml_prettify(xml_root))
+	print("==================================================")
 
-def AddTexturesToMaterials(mat, textures):
-	print("------------------------------------------------")
-	mat_nodes = mat.node_tree.nodes
-
-	for n in mat_nodes:
-		for tex in textures:
-			AssignTexture(n, tex[0], tex[1])
+	# save mat.
+	print("Saved: " + mat_file_path)
+	tree = ET.ElementTree(xml_root)
+	tree.write(mat_file_path)
 
 	pass
 
 
-def CreateMaterialsFromXml(self, context, materials):
-
-	PROJECT_DIR = def_globals.DESTINATION_ASSETS_PATH
-
+def CreateUnigineMaterials(self, context):
 	import os
-	import xml.etree.ElementTree as ET
 
-	for mat in materials:
-		mat_name = def_globals.xml_get(mat, "name")
-		textures = []
+	mat = bpy.context.active_object.active_material
+	mat_name = mat.name
 
-		for tex in mat.iter('Texture'):
-			texture_path_orig = def_globals.xml_get(tex, "file")
-			
-			texture_path = os.path.split(texture_path_orig)[0]
-			texture_name = os.path.split(texture_path_orig)[1]
-			
-			texture_name = texture_name.replace(".tif", "").replace(".tga", "")
-			texture_name = def_globals.convert_suffixes_to_unigine(texture_name)
-			texture_name = texture_name + ".tga"
-
-			tex = [def_globals.xml_get(tex, "map"), texture_path + "\\" + texture_name]
-			textures.append(tex)
-		
-		new_mat = CreateMaterialGeneric(self, context, mat_name)
-		AddTexturesToMaterials(new_mat, textures)
-
-	pass
-
-
-def RecreateMaterialFromXml(self, context):
-	'''
-
-	'''
-	import os
-	import xml.etree.ElementTree as ET
-
-	active_obj = bpy.context.active_object
-	mat = active_obj.active_material
-
+	# paths
 	blend_folder = os.path.dirname(bpy.data.filepath)
+	rel_blend_folder = blend_folder[blend_folder.find("models"):]
+	full_path = os.path.normpath(os.path.join(def_globals.DESTINATION_ASSETS_PATH, rel_blend_folder)).replace("\\", "/")
+	full_mat_path = os.path.normpath(os.path.join(full_path, "materials"))
+	mat_file_path = full_mat_path + "\\" + mat_name + ".mat"
 
-	materials = []
+	# TODO
+	# Если материал уже существует просто апдейтить пути к текстурам
 
-	tree = ET.parse(def_globals.MODELS_XML)
-	root = tree.getroot()
-
-	for mod in root.iter('Model'):
-		path_model = def_globals.xml_get(mod, "path")
-		path_mat = def_globals.xml_get(mod, "mtl_path").lower().replace("/", "\\")
-
-		path = os.path.split(path_model)[0]
-		name = os.path.split(path_model)[1]
-
-		if (not path in blend_folder): continue
-		
-		for collection in bpy.data.collections:
-			for obj in collection.objects:
-				if (active_obj != obj): continue
-				
-				for obj in collection.objects:
-					if (obj.name.startswith("_export_")): # find exporter helper
-						materials = GetXmlMat(path_mat)
-						break
-
-	# create materials.
-	CreateMaterialsFromXml(self, context, materials)
-
+	CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder)
 	pass
 
 
-class UNIGINETOOLS_OT_RecreateMaterialFromXml(bpy.types.Operator):
-	bl_label = "Recreate material from xml"
-	bl_idname = "uniginetools.recreate_material_from_xml"
+class UNIGINETOOLS_OT_CreateUnigineMaterial(bpy.types.Operator):
+	bl_label = "Create Unigine material"
+	bl_idname = "uniginetools.create_unigine_material"
 	bl_options = {'REGISTER', 'UNDO'}
 
 	def execute(self, context):
-		RecreateMaterialFromXml(self, context)
-		
-		self.report({'INFO'}, "recreated")
+		CreateUnigineMaterials(self, context)
+
+		# material_name = bpy.context.active_object.active_material.name
+		# message = "{} material created".format(material_name)
+		# self.report({'INFO'}, message)
 
 		return {'FINISHED'}
 
-
 # -----------------------------------------------------------------------------------------
-# Materials.
+# Create blender materials.
 # -----------------------------------------------------------------------------------------
-def CreateMaterialGeneric(self, context, name = ""):
+def CreateMaterialGeneric(self, context, obj = None, name = ""):
 	'''
 	Find material by name or create.
 	Create material node tree.
@@ -181,19 +190,21 @@ def CreateMaterialGeneric(self, context, name = ""):
 
 	textures_path = GetDefaultTexFolder()
 
-	obj = bpy.context.active_object
+	# obj = bpy.context.active_object
 	
 	mat = None
 	if (name == ""):
-		mat = obj.active_material
+		if (not obj is None): mat = obj.active_material
 	else:
 		mat = bpy.data.materials.get(name)	
 
 	if (mat is None):
 		# create new material
-		mat = bpy.data.materials.new(name = "Material")
-		mat.use_nodes = True
-		bpy.context.active_object.active_material = mat
+		if (name == ""):  name = "Material"
+		mat = bpy.data.materials.new(name = name)
+		# bpy.context.active_object.active_material = mat
+	
+	mat.use_nodes = True
 
 	# delete all nodes
 	for m in mat.node_tree.nodes:
@@ -388,6 +399,7 @@ def BlenderDefaultUI(self, context):
 
 	pass
 
+
 class UNIGINETOOLS_OT_CreateDefaultUILayout(bpy.types.Operator):
 	bl_label = "Default ui layout."
 	bl_idname = "uniginetools.create_default_ui_layout"
@@ -405,11 +417,12 @@ class UNIGINETOOLS_OT_CreateDefaultUILayout(bpy.types.Operator):
 # Register/Unregister.
 # -----------------------------------------------------------------------------------------
 classes = (
-	UNIGINETOOLS_OT_RecreateMaterialFromXml,
+	UNIGINETOOLS_OT_CreateUnigineMaterial,
 	UNIGINETOOLS_OT_CreateMaterialGeneric,
 	UNIGINETOOLS_CreateMaterials,
 	UNIGINETOOLS_OT_CreateDefaultUILayout,
 )
+
 
 def materials_menu(self, context):
 	layout = self.layout
@@ -418,6 +431,7 @@ def materials_menu(self, context):
 	# layout.separator()
 	layout.menu(UNIGINETOOLS_CreateMaterials.bl_idname, icon="MATERIAL")
 	layout.separator()
+
 
 def register():
 	from bpy.utils import register_class

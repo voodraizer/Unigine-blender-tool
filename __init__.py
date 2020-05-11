@@ -28,6 +28,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 if "bpy" in locals():
 	import importlib
 	if "tools" in locals(): importlib.reload(tools)
+	if "tmp_cry_migrate" in locals(): importlib.reload(tmp_cry_migrate)
 
 
 
@@ -52,7 +53,15 @@ class Addon_UI(bpy.types.Panel):
 		col = layout.column(align=True)
 		row = col.split(factor = 0.5)
 		row.operator(tools.UNIGINETOOLS_OT_CreateDefaultUILayout.bl_idname, text="Default UI")
-		row.operator(tools.UNIGINETOOLS_OT_RecreateMaterialFromXml.bl_idname, text="Recreate mats")
+		row.operator(tmp_cry_migrate.UNIGINETOOLS_OT_RecreateMaterialFromXml.bl_idname, text="Recreate mats")
+
+		layout.separator()
+
+		col = layout.column(align=True)
+		row = col.split(factor = 0.5)
+		row.operator(tools.UNIGINETOOLS_OT_CreateUnigineMaterial.bl_idname, text="Create Unigine mat")
+		# row.operator(tools.UNIGINETOOLS_OT_RecreateMaterialFromXml.bl_idname, text="Recreate mats")
+
 
 		pass
 
@@ -71,8 +80,10 @@ def register():
 	from bpy.utils import register_class
 
 	from . import tools
+	from . import tmp_cry_migrate
 	
 	tools.register()
+	tmp_cry_migrate.register()
 	
 	for cls in classes:
 		register_class(cls)
@@ -87,8 +98,10 @@ def unregister():
 	from bpy.utils import unregister_class
 
 	from . import tools
+	from . import tmp_cry_migrate
 		
 	tools.unregister()
+	tmp_cry_migrate.unregister()
 	
 	for cls in classes:
 		unregister_class(cls)
