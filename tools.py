@@ -28,10 +28,16 @@ def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
 	'''
 
 	def GetPathFromImage(image):
-		image_path = image.filepath
+		image_path = image.filepath.replace("/", "\\").lower()
 		
 		if ("default_n.tga" in image_path or "default_sh.tga" in image_path or "default_n.tga" in image_path):
 			return None
+		
+		import def_globals
+		proj_path = def_globals.ART_ASSETS_PATH.replace("/", "\\").lower()
+		print("\n ==>   " + image_path)
+		print(" ==>   " + proj_path)
+		if (proj_path in image_path): image_path = image_path[len(proj_path):]
 
 		if (image_path.startswith("//..\..\..\Textures")):
 			image_path = (image_path[image_path.find("Textures"):]).replace("\\", "/")
@@ -131,6 +137,7 @@ def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
 		xml_child.set('expression', "0")
 
 
+	import def_globals
 	print("==================================================")
 	print(def_globals.xml_prettify(xml_root))
 	print("==================================================")
@@ -145,6 +152,8 @@ def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
 
 def CreateUnigineMaterials(self, context):
 	import os
+
+	import def_globals
 
 	mat = bpy.context.active_object.active_material
 	mat_name = mat.name

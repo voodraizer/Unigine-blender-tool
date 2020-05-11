@@ -21,32 +21,6 @@ def GetBlenderFileFolder():
 	return blend_folder.lower()
 
 
-def GetXmlMat(ref_path):
-	import os
-	import xml.etree.ElementTree as ET
-
-	materials = {}
-
-	mat_tree = ET.parse(def_globals.MATERIALS_XML)
-	mat_root = mat_tree.getroot()
-
-	blend_folder = GetBlenderFileFolder()
-
-	for mat in mat_root.iter('Material'):
-		path_mat = def_globals.xml_get(mat, "mtl_file").lower().replace("/", "\\")
-
-		if (not blend_folder in path_mat): continue
-		if (path_mat in materials.keys()): continue
-
-		if (ref_path in path_mat):
-			print("Found mat: " + path_mat)
-			materials[path_mat] =  mat
-	
-	# print("Keys: " + str(list(materials.keys())))
-
-	return materials
-
-
 
 def AssignTexture(node, tex_type, tex_path):
 	import os
@@ -138,20 +112,19 @@ def RecreateMaterialFromXml(self, context):
 	print("====================== FOUND MATS ======================")
 	print("========================================================\n")
 
-	for mod in root.iter('Model'):
-		path_model = def_globals.xml_get(mod, "path")
-		path_mat = def_globals.xml_get(mod, "mtl_path").lower().replace("/", "\\")
+	materials = {}
 
-		path = os.path.split(path_model)[0]
-		name = os.path.split(path_model)[1]
+	mat_tree = ET.parse(def_globals.MATERIALS_XML)
+	mat_root = mat_tree.getroot()
 
-		if (not path.lower() in blend_folder): continue
+	for mat in mat_root.iter('Material'):
+		path_mat = def_globals.xml_get(mat, "mtl_file").lower().replace("/", "\\")
 
-		if (path_mat.startswith(".\\")):
-			path_mat = path_mat[2:]
+		if (not blend_folder in path_mat): continue
+		if (path_mat in materials.keys()): continue
 
-		found_mats = GetXmlMat(path_mat)
-		materials = {**materials, **found_mats}
+		print("Found mat: " + path_mat)
+		materials[path_mat] =  mat
 
 
 	print("\n========================================================")
@@ -169,6 +142,11 @@ class UNIGINETOOLS_OT_RecreateMaterialFromXml(bpy.types.Operator):
 
 	def execute(self, context):
 		RecreateMaterialFromXml(self, context)
+
+		# try assign most matched material
+		for obj in bpy.context.selected_objects:
+			for mat in bpy.data.materials:
+				if (mat.name.lower() in obj.name.lower()): obj.active_material = mat
 		
 		self.report({'INFO'}, "recreated")
 
