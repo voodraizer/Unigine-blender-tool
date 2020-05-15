@@ -231,18 +231,27 @@ class UNIGINETOOLS_OT_CreateUnigineMaterial(bpy.types.Operator):
 # -----------------------------------------------------------------------------------------
 # Create blender materials.
 # -----------------------------------------------------------------------------------------
-def CreateMaterialGeneric(self, context, obj = None, name = ""):
+def CreateMaterialGeneric(self, context, obj = None, mat_name = ""):
 	'''
 	
 	'''
 	import os
 
+	mat = None
+	
+	if (not obj is None): mat = obj.active_material
+	
+	if (not mat_name == ""):
+		mat = bpy.data.materials.get(mat_name)
+		if (mat is None):
+			# create new material
+			mat = bpy.data.materials.new(name = mat_name)
+
+
+	if (mat is None): return None
+	
 	ImportMaterialNodeGroups()
 
-	obj = bpy.context.active_object
-	
-	mat = obj.active_material
-	
 	mat.use_nodes = True
 
 	# delete all nodes
@@ -337,15 +346,25 @@ def ImportMaterialNodeGroups():
 	pass
 
 
-def CreateMaterialVertexBlend(self, context):
+def CreateMaterialVertexBlend(self, context, obj = None, mat_name = ""):
 	'''
 
 	'''
+	mat = None
+	
+	if (not obj is None): mat = obj.active_material
+	
+	if (not mat_name == ""):
+		mat = bpy.data.materials.get(mat_name)
+		if (mat is None):
+			# create new material
+			mat = bpy.data.materials.new(name = mat_name)
+
+
+	if (mat is None): return None
 
 	ImportMaterialNodeGroups()
 
-	obj = bpy.context.active_object
-	mat = obj.active_material
 	mat.use_nodes = True
 
 	mat_nodes = mat.node_tree.nodes
@@ -428,7 +447,7 @@ def CreateMaterialVertexBlend(self, context):
 	LoadDefaultTexture(texture, "Normals")
 	mat_links.new(texture.outputs['Color'], node_group.inputs['Normals 3'])
 
-	pass
+	return mat
 
 
 def Debug_PrintMaterialNodes(self, context):
@@ -451,12 +470,22 @@ class UNIGINETOOLS_OT_CreateMaterialGeneric(bpy.types.Operator):
 	bl_idname = "uniginetools.creatematerialgeneric"
 	bl_options = {'REGISTER', 'UNDO'}
 
-	def execute(self, context):
-		CreateMaterialGeneric(self, context)
+	@staticmethod
+	def oops(self, context):
+		self.layout.label(text = "Failed to create material!")
 
-		material_name = bpy.context.active_object.active_material.name
-		message = "{} material created".format(material_name)
-		self.report({'INFO'}, message)
+	def execute(self, context):
+		
+		obj = bpy.context.active_object
+		if (not obj is None): mat_name = obj.active_material
+
+		mat = CreateMaterialGeneric(self, context, obj)
+
+		if (not mat is None):
+			message = "{} material created".format(mat.name)
+			self.report({'INFO'}, message)
+		else:
+			bpy.context.window_manager.popup_menu(UNIGINETOOLS_OT_CreateMaterialGeneric.oops, title="Error", icon='ERROR')
 
 		return {'FINISHED'}
 
@@ -467,11 +496,17 @@ class UNIGINETOOLS_OT_CreateMaterialVertexBlend(bpy.types.Operator):
 	bl_options = {'REGISTER', 'UNDO'}
 
 	def execute(self, context):
-		CreateMaterialVertexBlend(self, context)
+		
+		obj = bpy.context.active_object
+		if (not obj is None): mat_name = obj.active_material
 
-		# material_name = bpy.context.active_object.active_material.name
-		# message = "{} material created".format(material_name)
-		# self.report({'INFO'}, message)
+		mat = CreateMaterialVertexBlend(self, context, obj)
+
+		if (not mat is None):
+			message = "{} material created".format(mat.name)
+			self.report({'INFO'}, message)
+		else:
+			bpy.context.window_manager.popup_menu(UNIGINETOOLS_OT_CreateMaterialGeneric.oops, title="Error", icon='ERROR')
 
 		return {'FINISHED'}
 
