@@ -31,6 +31,7 @@ if "bpy" in locals():
 	if "tmp_cry_migrate" in locals(): importlib.reload(tmp_cry_migrate)
 
 
+DEFINE_CRY_MIGRATE = True
 
 # -----------------------------------------------------------------------------------------
 # UI.
@@ -53,7 +54,8 @@ class Addon_UI(bpy.types.Panel):
 		col = layout.column(align=True)
 		row = col.split(factor = 0.5)
 		row.operator(tools.UNIGINETOOLS_OT_CreateDefaultUILayout.bl_idname, text="Default UI")
-		row.operator(tmp_cry_migrate.UNIGINETOOLS_OT_RecreateMaterialFromXml.bl_idname, text="Recreate mats")
+		if (DEFINE_CRY_MIGRATE):
+			row.operator(tmp_cry_migrate.UNIGINETOOLS_OT_RecreateMaterialFromXml.bl_idname, text="Recreate mats")
 
 		layout.separator()
 

@@ -4,19 +4,57 @@ from bpy.props import FloatVectorProperty
 from bpy_extras.object_utils import AddObjectHelper, object_data_add
 from mathutils import Vector
 
+
+TEX_NODE_COLOR = (0.272209, 0.608, 0.378043)
+
 # -----------------------------------------------------------------------------------------
 # Utils.
 # -----------------------------------------------------------------------------------------
-def GetDefaultTexFolder():
+def GetDefaultResFolder():
 	'''
 	Get default textures for addon.
 	'''
 	import os
 	import sys
 	file_path = os.path.dirname(os.path.abspath(__file__))
-	textures_path = os.path.join(file_path, "default_tex") + "\\"
+	textures_path = os.path.join(file_path, "default_resources") + "\\"
 
 	return textures_path
+
+
+def CreateTextureNode(mat_nodes, name = "Texture"):
+	'''
+
+	'''
+	texture = mat_nodes.new('ShaderNodeTexImage')
+	texture.name = name
+	texture.location = (0, 0)
+	texture.use_custom_color = True
+	texture.color = TEX_NODE_COLOR
+
+	return texture
+
+
+def LoadDefaultTexture(node, tex_type):
+	'''
+
+	'''
+	import os
+
+	texture_name = ""
+	if (tex_type == "Albedo"): texture_name = "default_alb.tga"
+	if (tex_type == "Shading"): texture_name = "default_sh.tga"
+	if (tex_type == "Normals"): texture_name = "default_n.tga"
+
+	tex_path = GetDefaultResFolder() + texture_name
+	tex_name = os.path.split(tex_path)[1]
+	if (bpy.data.images.get(tex_name) == None):
+		bpy.data.images.load(filepath=tex_path)
+
+	node.image = bpy.data.images.get(tex_name)
+
+	if (tex_type == "Shading"): node.image.colorspace_settings.name = 'Linear'
+	if (tex_type == "Normals"): node.image.colorspace_settings.name = 'Non-Color'
 
 
 # -----------------------------------------------------------------------------------------
@@ -30,7 +68,7 @@ def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
 	def GetPathFromImage(image):
 		image_path = image.filepath.replace("/", "\\").lower()
 		
-		if ("default_n.tga" in image_path or "default_sh.tga" in image_path or "default_n.tga" in image_path):
+		if ("default_alb.tga" in image_path or "default_sh.tga" in image_path or "default_n.tga" in image_path):
 			return None
 		
 		import def_globals
@@ -151,6 +189,9 @@ def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
 
 
 def CreateUnigineMaterials(self, context):
+	'''
+
+	'''
 	import os
 
 	import def_globals
@@ -186,32 +227,21 @@ class UNIGINETOOLS_OT_CreateUnigineMaterial(bpy.types.Operator):
 
 		return {'FINISHED'}
 
+
 # -----------------------------------------------------------------------------------------
 # Create blender materials.
 # -----------------------------------------------------------------------------------------
 def CreateMaterialGeneric(self, context, obj = None, name = ""):
 	'''
-	Find material by name or create.
-	Create material node tree.
+	
 	'''
-
 	import os
 
-	textures_path = GetDefaultTexFolder()
+	ImportMaterialNodeGroups()
 
-	# obj = bpy.context.active_object
+	obj = bpy.context.active_object
 	
-	mat = None
-	if (name == ""):
-		if (not obj is None): mat = obj.active_material
-	else:
-		mat = bpy.data.materials.get(name)	
-
-	if (mat is None):
-		# create new material
-		if (name == ""):  name = "Material"
-		mat = bpy.data.materials.new(name = name)
-		# bpy.context.active_object.active_material = mat
+	mat = obj.active_material
 	
 	mat.use_nodes = True
 
@@ -226,100 +256,194 @@ def CreateMaterialGeneric(self, context, obj = None, name = ""):
 	# generate new node tree
 	output = mat_nodes.new('ShaderNodeOutputMaterial')
 	output.name = "Output"
-	output.location = (0, 0)
+	output.location = (305, 320)
 
-	bsdf = mat_nodes.new('ShaderNodeBsdfPrincipled')
-	bsdf.name = "Bsdf"
-	bsdf.location = (-400, 0)
-	mat_links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+	# group
+	node_group = mat_nodes.new('ShaderNodeGroup')
+	node_group.location = (-20, 296)
+	node_group.use_custom_color = True
+	node_group.color = (0.38, 0.54, 0.6)
+	node_group.width = 200
+	node_group.node_tree = bpy.data.node_groups['MG_Generic']
+
+	mat_links.new(node_group.outputs['BSDF'], output.inputs['Surface'])
 	
 
 	# albedo
-	texture = mat_nodes.new('ShaderNodeTexImage')
-	texture.name = "Albedo"
-	texture.location = (-800, 50)
-	texture.use_custom_color = True
-	texture.color = (0.272209, 0.608, 0.378043)
-
-	tex_path = textures_path + "default_alb.tga"
-	tex_name = os.path.split(tex_path)[1]
-	if (bpy.data.images.get(tex_name) == None):
-		# bpy.ops.image.open(filepath='D:/wood_10_alb.tga')
-		bpy.data.images.load(filepath=tex_path)
-	texture.image = bpy.data.images.get(tex_name)
-
-	mat_links.new(texture.outputs['Color'], bsdf.inputs['Base Color'])
-
-
-	# normals
-	texture = mat_nodes.new('ShaderNodeTexImage')
-	texture.name = "Normals"
-	texture.location = (-1400, -600)
-	texture.use_custom_color = True
-	texture.color = (0.272209, 0.608, 0.378043)
-
-	tex_path = textures_path + "default_n.tga"
-	tex_name = os.path.split(tex_path)[1]
-	if (bpy.data.images.get(tex_name) == None):
-		bpy.data.images.load(filepath=tex_path)
-	texture.image = bpy.data.images.get(tex_name)
-	texture.image.colorspace_settings.name = 'Non-Color'
-
-	sep = mat_nodes.new("ShaderNodeSeparateRGB")
-	sep.location = (-1100, -650)
-	sep.hide = True
-	comb = mat_nodes.new("ShaderNodeCombineRGB")
-	comb.location = (-800, -650)
-	comb.hide = True
-	maths = mat_nodes.new("ShaderNodeMath")
-	maths.operation = 'SUBTRACT'
-	maths.inputs[0].default_value = 1
-	maths.location = (-950, -600)
-	maths.hide = True
-	mat_links.new(texture.outputs['Color'], sep.inputs['Image'])
-	mat_links.new(sep.outputs['R'], comb.inputs[0])
-	mat_links.new(sep.outputs['G'], maths.inputs[1])
-	mat_links.new(sep.outputs['B'], comb.inputs[2])
-	mat_links.new(maths.outputs['Value'], comb.inputs[1])
-
-
-	normalmap = mat_nodes.new("ShaderNodeNormalMap")
-	normalmap.location = (-600, -500)
-	normalmap.uv_map = "UVMap"
-	mat_links.new(comb.outputs['Image'], normalmap.inputs['Color'])
-	mat_links.new(normalmap.outputs['Normal'], bsdf.inputs['Normal'])
-
+	texture = CreateTextureNode(mat_nodes, "Albedo")
+	texture.location = (-585, 550)
+	LoadDefaultTexture(texture, "Albedo")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Albedo'])
 
 	# shading
-	texture = mat_nodes.new('ShaderNodeTexImage')
-	texture.name = "Shading"
-	texture.location = (-1200, -250)
-	texture.use_custom_color = True
-	texture.color = (0.272209, 0.608, 0.378043)
+	texture = CreateTextureNode(mat_nodes, "Shading")
+	texture.location = (-585, 251)
+	LoadDefaultTexture(texture, "Shading")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Shading'])
 
-	tex_path = textures_path + "default_sh.tga"
-	tex_name = os.path.split(tex_path)[1]
-	if (bpy.data.images.get(tex_name) == None):
-		bpy.data.images.load(filepath=tex_path)
-	texture.image = bpy.data.images.get(tex_name)
-	texture.image.colorspace_settings.name = 'Linear'
+	# normals
+	texture = CreateTextureNode(mat_nodes, "Normals")
+	texture.location = (-585, -47)
+	LoadDefaultTexture(texture, "Normals")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Normals'])
 
-	sep_rgb = mat_nodes.new(type="ShaderNodeSeparateRGB")
-	sep_rgb.location = (-900, -300)
-	sep_rgb.hide = True
-	mat_links.new(texture.outputs['Color'], sep_rgb.inputs['Image'])
-
-	mat_links.new(sep_rgb.outputs['R'], bsdf.inputs['Metallic'])
-
-	maths = mat_nodes.new("ShaderNodeMath")
-	maths.location = (-650, -350)
-	maths.hide = True
-	maths.operation = 'SUBTRACT'
-	maths.inputs[0].default_value = 1
-	mat_links.new(sep_rgb.outputs['G'], maths.inputs[1])
-	mat_links.new(maths.outputs['Value'], bsdf.inputs['Roughness'])
 
 	return mat
+
+
+def ImportMaterialNodeGroups():
+	"""
+
+	"""
+
+	group_names = ['MG_Generic', 'MG_VertexBlend', 'VB_Blend_coefficient']
+	old_groups = []
+	old_group_suffix = "_old_group"
+
+	# rename and store old groups
+	for gr_n in group_names:
+		if (not bpy.data.node_groups.get(gr_n) is None):
+			gr = bpy.data.node_groups.get(gr_n)
+			gr.name = gr_n + old_group_suffix
+			gr.use_fake_user = False
+			old_groups.append(gr)
+
+	import os
+
+	filepath = os.path.join(GetDefaultResFolder(), 'node_library.blend')
+
+	#  load new groups
+	with bpy.data.libraries.load(filepath) as (data_from, data_to):
+		data_to.node_groups = data_from.node_groups
+
+	for node_group in data_to.node_groups:
+		# log.debug('Importing material node group: %s', node_group.name)
+		node_group.use_fake_user = True
+
+	# replace old nodes from materials
+	for mat in bpy.data.materials:
+		if (mat.use_nodes):
+			for node in mat.node_tree.nodes:
+				if (node.type == 'GROUP'):
+					orig_node_group = node.node_tree.name[:node.node_tree.name.find(old_group_suffix)]
+					if (not bpy.data.node_groups.get(orig_node_group) is None):
+						node.node_tree = bpy.data.node_groups.get(orig_node_group)
+					
+	
+	# delete old groups
+	for gr in old_groups:
+		bpy.data.node_groups.remove(gr)
+
+	pass
+
+
+def CreateMaterialVertexBlend(self, context):
+	'''
+
+	'''
+
+	ImportMaterialNodeGroups()
+
+	obj = bpy.context.active_object
+	mat = obj.active_material
+	mat.use_nodes = True
+
+	mat_nodes = mat.node_tree.nodes
+	mat_links = mat.node_tree.links
+
+	# delete all nodes
+	for n in mat_nodes:
+		mat_nodes.remove(n)
+
+	output = mat_nodes.new('ShaderNodeOutputMaterial')
+	output.location = (300, 300)
+
+	# Material group node (The datablock is not yet assigned)
+	node_group = mat_nodes.new('ShaderNodeGroup')
+	node_group.location = (-205, 300)
+	node_group.use_custom_color = True
+	node_group.color = (0.38, 0.54, 0.6)
+	node_group.width = 300
+	node_group.node_tree = bpy.data.node_groups['MG_VertexBlend']
+
+	mat_links.new(node_group.outputs['BSDF'], output.inputs['Surface'])
+
+	vert_color = mat_nodes.new("ShaderNodeVertexColor")
+	vert_color.location = (-490, -225)
+
+	mat_links.new(vert_color.outputs['Color'], node_group.inputs['Vertex color'])
+
+	# Textures mask
+	texture = CreateTextureNode(mat_nodes, "Mask")
+	texture.location = (-1200, -135)
+	
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Blend mask'])
+
+	# Textures 1
+	texture = CreateTextureNode(mat_nodes, "Albedo")
+	texture.location = (-1200, 770)
+	LoadDefaultTexture(texture, "Albedo")
+	LoadDefaultTexture(texture, "Albedo")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Albedo'])
+
+	texture = CreateTextureNode(mat_nodes, "Shading")
+	texture.location = (-1470, 770)
+	LoadDefaultTexture(texture, "Shading")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Shading'])
+
+	texture = CreateTextureNode(mat_nodes, "Normals")
+	texture.location = (-1740, 770)
+	LoadDefaultTexture(texture, "Normals")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Normals'])
+
+	# Textures 2
+	texture = CreateTextureNode(mat_nodes, "Albedo 2")
+	texture.location = (-1200, 470)
+	LoadDefaultTexture(texture, "Albedo")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Albedo 2'])
+
+	texture = CreateTextureNode(mat_nodes, "Shading 2")
+	texture.location = (-1470, 470)
+	LoadDefaultTexture(texture, "Shading")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Shading 2'])
+
+	texture = CreateTextureNode(mat_nodes, "Normals 2")
+	texture.location = (-1740, 470)
+	LoadDefaultTexture(texture, "Normals")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Normals 2'])
+
+	# Textures 3
+	texture = CreateTextureNode(mat_nodes, "Albedo 3")
+	texture.location = (-1200, 170)
+	LoadDefaultTexture(texture, "Albedo")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Albedo 3'])
+
+	texture = CreateTextureNode(mat_nodes, "Shading 3")
+	texture.location = (-1470, 170)
+	LoadDefaultTexture(texture, "Shading")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Shading 3'])
+
+	texture = CreateTextureNode(mat_nodes, "Normals 3")
+	texture.location = (-1740, 170)
+	LoadDefaultTexture(texture, "Normals")
+	mat_links.new(texture.outputs['Color'], node_group.inputs['Normals 3'])
+
+	pass
+
+
+def Debug_PrintMaterialNodes(self, context):
+	obj = bpy.context.active_object
+	mat = obj.active_material
+
+	mat_nodes = mat.node_tree.nodes
+	mat_links = mat.node_tree.links
+
+	for m_n in mat_nodes:
+		print("============================================")
+		if (m_n.type == "TEX_IMAGE"):
+			print("Type: " + m_n.type + " Name: " + m_n.image.name + " Pos: " + str(m_n.location))
+		else:
+			print("Type: " + m_n.type + " Name: " + m_n.name + " Pos: " + str(m_n.location))
 
 
 class UNIGINETOOLS_OT_CreateMaterialGeneric(bpy.types.Operator):
@@ -337,6 +461,36 @@ class UNIGINETOOLS_OT_CreateMaterialGeneric(bpy.types.Operator):
 		return {'FINISHED'}
 
 
+class UNIGINETOOLS_OT_CreateMaterialVertexBlend(bpy.types.Operator):
+	bl_label = "Create vertex blend"
+	bl_idname = "uniginetools.create_material_vertex_blend"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		CreateMaterialVertexBlend(self, context)
+
+		# material_name = bpy.context.active_object.active_material.name
+		# message = "{} material created".format(material_name)
+		# self.report({'INFO'}, message)
+
+		return {'FINISHED'}
+
+
+class UNIGINETOOLS_OT_DebugPrintMaterial(bpy.types.Operator):
+	bl_label = "Debug print material nodes"
+	bl_idname = "uniginetools.debug_print_material"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		Debug_PrintMaterialNodes(self, context)
+
+		material_name = bpy.context.active_object.active_material.name
+		message = "{} debug printed".format(material_name)
+		self.report({'INFO'}, message)
+
+		return {'FINISHED'}
+
+
 class UNIGINETOOLS_CreateMaterials(bpy.types.Menu):
 	bl_label = "Create materials"
 	bl_idname = "UNIGINETOOLS_MT_create_materials"
@@ -345,6 +499,8 @@ class UNIGINETOOLS_CreateMaterials(bpy.types.Menu):
 		layout = self.layout
 		layout.operator(UNIGINETOOLS_OT_CreateMaterialGeneric.bl_idname,
 			text=UNIGINETOOLS_OT_CreateMaterialGeneric.bl_label)
+		layout.operator(UNIGINETOOLS_OT_CreateMaterialVertexBlend.bl_idname,
+			text=UNIGINETOOLS_OT_CreateMaterialVertexBlend.bl_label)
 
 # -----------------------------------------------------------------------------------------
 # Objects.
@@ -361,7 +517,7 @@ class UNIGINETOOLS_CreateMaterials(bpy.types.Menu):
 def BlenderDefaultUI(self, context):
 
 	# workspace
-	blend_path = GetDefaultTexFolder() + "default_workspaces.blend"
+	blend_path = GetDefaultResFolder() + "default_workspaces.blend"
 
 	bpy.ops.workspace.append_activate(idname = "Animation", filepath = blend_path)
 
@@ -428,7 +584,9 @@ class UNIGINETOOLS_OT_CreateDefaultUILayout(bpy.types.Operator):
 classes = (
 	UNIGINETOOLS_OT_CreateUnigineMaterial,
 	UNIGINETOOLS_OT_CreateMaterialGeneric,
+	UNIGINETOOLS_OT_CreateMaterialVertexBlend,
 	UNIGINETOOLS_CreateMaterials,
+	UNIGINETOOLS_OT_DebugPrintMaterial,
 	UNIGINETOOLS_OT_CreateDefaultUILayout,
 )
 
