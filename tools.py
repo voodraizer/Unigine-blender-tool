@@ -6,6 +6,7 @@ from mathutils import Vector
 
 
 TEX_NODE_COLOR = (0.272209, 0.608, 0.378043)
+MAT_GROUP_NAMES = ['MG_Generic', 'MG_VertexBlend', 'VB_Blend_coefficient']
 
 # -----------------------------------------------------------------------------------------
 # Utils.
@@ -57,41 +58,52 @@ def LoadDefaultTexture(node, tex_type):
 	if (tex_type == "Normals"): node.image.colorspace_settings.name = 'Non-Color'
 
 
+def GetPathFromImage(image, rel_blend_folder):
+	import os
+
+	image_path = image.filepath.replace("/", "\\").lower()
+	
+	if ("default_alb.tga" in image_path or "default_sh.tga" in image_path or "default_n.tga" in image_path):
+		return None
+	
+	import def_globals
+	proj_path = def_globals.ART_ASSETS_PATH.replace("/", "\\").lower()
+	
+	if (proj_path in image_path):
+		image_path = image_path[len(proj_path):]
+		return image_path
+
+	image_path = image_path.replace("..", "")
+	for ch in image_path:
+		if (ch == "\\"):
+			image_path = image_path[1:]
+		else:
+			break
+		
+	print("\n Image path ==>   " + image_path)
+	# if (image_path.startswith("\\..\..\..\Textures")):
+	# if (".." in image_path):
+	# 	image_path = (image_path[image_path.find("textures"):]).replace("\\", "/")
+	# if (image_path.startswith("//")):
+	# 	image_path = os.path.join(rel_blend_folder, image_path[2:]).replace("\\", "/")
+
+	# print("\n ==>   " + image_path)
+	# print(" ==>   " + proj_path)
+	
+	return image_path
+
+
 # -----------------------------------------------------------------------------------------
 # Create unigine materials.
 # -----------------------------------------------------------------------------------------
-def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
-	'''
-	Create unigine material and link existing textures.
-	'''
-
-	def GetPathFromImage(image):
-		image_path = image.filepath.replace("/", "\\").lower()
-		
-		if ("default_alb.tga" in image_path or "default_sh.tga" in image_path or "default_n.tga" in image_path):
-			return None
-		
-		import def_globals
-		proj_path = def_globals.ART_ASSETS_PATH.replace("/", "\\").lower()
-		print("\n ==>   " + image_path)
-		print(" ==>   " + proj_path)
-		if (proj_path in image_path): image_path = image_path[len(proj_path):]
-
-		if (image_path.startswith("//..\..\..\Textures")):
-			image_path = (image_path[image_path.find("Textures"):]).replace("\\", "/")
-		if (image_path.startswith("//")):
-			image_path = os.path.join(rel_blend_folder, image_path[2:]).replace("\\", "/")
-		
-		return image_path
-
+def CreateUnigineMaterialHeader(xml_root, mat_file_path, mat_name, mat_base):
 	import xml.etree.ElementTree as ET
-	import os
 	import uuid
 	import hashlib
 
 	# <?xml version="1.0" encoding="utf-8"?>
 
-	xml_root = ET.Element('material')
+	# xml_root = ET.Element('material')
 	xml_root.set('version', "2.11.0.0")
 	xml_root.set('name', mat_name)
 
@@ -104,75 +116,92 @@ def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
 	# print("==================================================")
 
 	# material base type.
-	# if (mat_shader == "Illum"):
-	xml_root.set('base_material', "mesh_base")
+	xml_root.set('base_material', mat_base)
+	pass
+
+
+def CreateUnigineMaterialTexture(xml_root, image_node, type = "albedo", rel_blend_folder = ""):
+	import xml.etree.ElementTree as ET
+
+	xml_child = ET.SubElement(xml_root, 'texture')
+	xml_child.set('name', type)
+	if (not image_node is None):
+		image_path = GetPathFromImage(image_node.image, rel_blend_folder)
+		if (image_path):
+			xml_child.text = image_path
+		else:
+			xml_child.text = "guid://5219d6ddb5dbd1520e843a369ad2b64326bb24e2"	# white texture from core/textures/common/
+
+			if ("albedo" in type):
+				xml_child.text = "Textures/cry_missing/pink_alb.tga"
+			if ("shading" in type):
+				xml_child.text = "Textures/cry_missing/normal_sh.tga"
+			if ("normal" in type):
+				# xml_child.text = "guid://692dbb7d56d633e22551bd47f4d92cd2d498270d" # default normal
+				xml_child.text = "Textures/cry_missing/normal_n.tga"
+	pass
+
+
+def CreateunigineMaterialParameter(xml_root, param_name, param_value):
+	import xml.etree.ElementTree as ET
+
+	xml_child = ET.SubElement(xml_root, 'parameter')
+	xml_child.text = param_value
+	xml_child.set('name', param_name)
+	xml_child.set('expression', "0")
+
+
+def CreateunigineMaterialOptions(xml_root, param_name, param_value):
+	import xml.etree.ElementTree as ET
+
+	xml_child = ET.SubElement(xml_root, 'options')
+	xml_child.set(param_name, param_value)
+
+
+def CreateunigineMaterialState(xml_root, param_name, param_value):
+	import xml.etree.ElementTree as ET
+
+	xml_child = ET.SubElement(xml_root, 'state')
+	xml_child.set('name', param_name)
+	xml_child.text = param_value
+
+
+def CreateUnigineXmlMaterialGeneric(mat, mat_file_path, mat_name, rel_blend_folder):
+	'''
+	Create unigine material and link existing textures.
+	'''
+
+	import xml.etree.ElementTree as ET
+	import os
+
+	xml_root = ET.Element('material')
+	
+	CreateUnigineMaterialHeader(xml_root, mat_file_path, mat_name, "mesh_base")
 	
 	# textures.
-	xml_child = ET.SubElement(xml_root, 'texture')
-	xml_child.set('name', "albedo")
+	
+	# albedo.
+	image_node = mat.node_tree.nodes.get("Albedo")
+	CreateUnigineMaterialTexture(xml_root, image_node, "albedo", rel_blend_folder)
+
+	# shading.
+	image_node = mat.node_tree.nodes.get("Shading")
+	CreateUnigineMaterialTexture(xml_root, image_node, "shading", rel_blend_folder)
+
+	# normals.
+	image_node = mat.node_tree.nodes.get("Normals")
+	CreateUnigineMaterialTexture(xml_root, image_node, "normal", rel_blend_folder)
+	
+
+	# parameters.
+	# CreateunigineMaterialParameter(xml_root, "metalness", "1")
+	# CreateunigineMaterialParameter(xml_root, "specular_color", "1 1 1 1")
+	# CreateunigineMaterialParameter(xml_root, "gloss", "1")
+
 	albedo = mat.node_tree.nodes.get("Albedo")
-	if (not albedo is None):
-		# albedo
-		image_path = GetPathFromImage(albedo.image)
-		if (image_path):
-			xml_child.text = image_path
-		else:
-			# xml_child.text = "guid://5219d6ddb5dbd1520e843a369ad2b64326bb24e2"	# white texture from core/textures/common/
-			xml_child.text = "Textures/cry_missing/pink_alb.tga"
-
-
-	xml_child = ET.SubElement(xml_root, 'texture')
-	xml_child.set('name', "normal")
-	normals = mat.node_tree.nodes.get("Normals")
-	if (not normals is None):
-		# normal map
-		image_path = GetPathFromImage(normals.image)
-		if (image_path):
-			xml_child.text = image_path
-		else:
-			# xml_child.text = "guid://692dbb7d56d633e22551bd47f4d92cd2d498270d" # default normal
-			xml_child.text = "Textures/cry_missing/normal_n.tga"
-
-	
-	xml_child = ET.SubElement(xml_root, 'texture')
-	xml_child.set('name', "shading")
-	shading = mat.node_tree.nodes.get("Shading")
-	if (not shading is None):
-		# shading map
-		image_path = GetPathFromImage(shading.image)
-		if (image_path):
-			xml_child.text = image_path
-		else:
-			xml_child.text = "Textures/cry_missing/normal_sh.tga"
-	
-
-	# Parameters.
-	xml_child = ET.SubElement(xml_root, 'parameter')
-	xml_child.text = "1"
-	xml_child.set('name', "metalness")
-	xml_child.set('expression', "0")
-
-
-	xml_child = ET.SubElement(xml_root, 'parameter')
-	xml_child.text = "1 1 1 1"
-	xml_child.set('name', "specular_color")
-	xml_child.set('expression', "0")
-
-
-	xml_child = ET.SubElement(xml_root, 'parameter')
-	xml_child.text = "1"
-	xml_child.set('name', "gloss")
-	xml_child.set('expression', "0")
-
 	if (not albedo is None and albedo.outputs["Alpha"].links):
-		# Alpha test.
-		xml_child = ET.SubElement(xml_root, 'options')
-		xml_child.set('transparent', "1")
-		
-		xml_child = ET.SubElement(xml_root, 'parameter')
-		xml_child.text = "1.3"
-		xml_child.set('name', "transparent")
-		xml_child.set('expression', "0")
+		CreateunigineMaterialOptions(xml_root, "transparent", "1")
+		CreateunigineMaterialParameter(xml_root, "transparent", "1.3")
 
 
 	import def_globals
@@ -188,7 +217,68 @@ def CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder):
 	pass
 
 
-def CreateUnigineMaterials(self, context):
+def CreateUnigineXmlMaterialVertexBlend(mat, mat_file_path, mat_name, rel_blend_folder):
+	'''
+	Create unigine material and link existing textures.
+	'''
+	import xml.etree.ElementTree as ET
+	import os
+
+	xml_root = ET.Element('material')
+	
+	CreateUnigineMaterialHeader(xml_root, mat_file_path, mat_name, "base_mesh_vblend_4")
+
+	# states.
+	CreateunigineMaterialState(xml_root, "vertex_blend_enable", "1")
+	CreateunigineMaterialState(xml_root, "vertex_color_blend_r", "1")
+	CreateunigineMaterialState(xml_root, "vertex_color_blend_g", "1")
+
+	# textures.
+
+	# set 1.
+	image_node = mat.node_tree.nodes.get("Albedo")
+	CreateUnigineMaterialTexture(xml_root, image_node, "albedo", rel_blend_folder)
+	image_node = mat.node_tree.nodes.get("Shading")
+	CreateUnigineMaterialTexture(xml_root, image_node, "shading", rel_blend_folder)
+	image_node = mat.node_tree.nodes.get("Normals")
+	CreateUnigineMaterialTexture(xml_root, image_node, "normal", rel_blend_folder)
+	
+	# set 2.
+	image_node = mat.node_tree.nodes.get("Albedo 2")
+	CreateUnigineMaterialTexture(xml_root, image_node, "albedo_blend_r", rel_blend_folder)
+	image_node = mat.node_tree.nodes.get("Shading 2")
+	CreateUnigineMaterialTexture(xml_root, image_node, "shading_blend_r", rel_blend_folder)
+	image_node = mat.node_tree.nodes.get("Normals 2")
+	CreateUnigineMaterialTexture(xml_root, image_node, "normal_blend_r", rel_blend_folder)
+
+	# set 3.
+	image_node = mat.node_tree.nodes.get("Albedo 3")
+	CreateUnigineMaterialTexture(xml_root, image_node, "albedo_blend_g", rel_blend_folder)
+	image_node = mat.node_tree.nodes.get("Shading 3")
+	CreateUnigineMaterialTexture(xml_root, image_node, "shading_blend_g", rel_blend_folder)
+	image_node = mat.node_tree.nodes.get("Normals 3")
+	CreateUnigineMaterialTexture(xml_root, image_node, "normal_blend_g", rel_blend_folder)
+
+	# parameters.
+	CreateunigineMaterialParameter(xml_root, "blend_factor_r", "1")
+	CreateunigineMaterialParameter(xml_root, "blend_falloff_r", "1")
+	CreateunigineMaterialParameter(xml_root, "blend_alpha_r", "1")
+	CreateunigineMaterialParameter(xml_root, "blend_normals_r", "1")
+
+	import def_globals
+	print("==================================================")
+	print(def_globals.xml_prettify(xml_root))
+	print("==================================================")
+
+	# save mat.
+	print("Saved: " + mat_file_path)
+	tree = ET.ElementTree(xml_root)
+	tree.write(mat_file_path)
+
+	pass
+
+
+def CreateUnigineMaterials(self, context, mat = None):
 	'''
 
 	'''
@@ -196,20 +286,25 @@ def CreateUnigineMaterials(self, context):
 
 	import def_globals
 
-	mat = bpy.context.active_object.active_material
-	mat_name = mat.name
-
 	# paths
 	blend_folder = os.path.dirname(bpy.data.filepath)
 	rel_blend_folder = blend_folder[blend_folder.find("models"):]
 	full_path = os.path.normpath(os.path.join(def_globals.DESTINATION_ASSETS_PATH, rel_blend_folder)).replace("\\", "/")
 	full_mat_path = os.path.normpath(os.path.join(full_path, "materials"))
-	mat_file_path = full_mat_path + "\\" + mat_name + ".mat"
+	mat_file_path = full_mat_path + "\\" + mat.name + ".mat"
 
 	# TODO
 	# Если материал уже существует просто апдейтить пути к текстурам
 
-	CreateUnigineXmlMaterial(mat, mat_file_path, mat_name, rel_blend_folder)
+	for node in mat.node_tree.nodes:
+		if (node.type != 'GROUP'): continue
+		if (node.node_tree.name == "MG_Generic"):
+			CreateUnigineXmlMaterialGeneric(mat, mat_file_path, mat.name, rel_blend_folder)
+			break
+		if (node.node_tree.name == "MG_VertexBlend"):
+			CreateUnigineXmlMaterialVertexBlend(mat, mat_file_path, mat.name, rel_blend_folder)
+			break
+
 	pass
 
 
@@ -219,7 +314,12 @@ class UNIGINETOOLS_OT_CreateUnigineMaterial(bpy.types.Operator):
 	bl_options = {'REGISTER', 'UNDO'}
 
 	def execute(self, context):
-		CreateUnigineMaterials(self, context)
+		
+		for obj in bpy.context.selected_objects:
+			for slots in obj.material_slots:
+				mat = slots.material
+				if (mat is None): continue
+				CreateUnigineMaterials(self, context, mat = mat)
 
 		# material_name = bpy.context.active_object.active_material.name
 		# message = "{} material created".format(material_name)
@@ -305,12 +405,11 @@ def ImportMaterialNodeGroups():
 
 	"""
 
-	group_names = ['MG_Generic', 'MG_VertexBlend', 'VB_Blend_coefficient']
 	old_groups = []
 	old_group_suffix = "_old_group"
 
 	# rename and store old groups
-	for gr_n in group_names:
+	for gr_n in MAT_GROUP_NAMES:
 		if (not bpy.data.node_groups.get(gr_n) is None):
 			gr = bpy.data.node_groups.get(gr_n)
 			gr.name = gr_n + old_group_suffix
