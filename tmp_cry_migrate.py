@@ -5,8 +5,55 @@ import tools
 import sys
 sys.path.append("c:/GITs/MigrateCryAssetsToUnigine/")
 
-import def_globals
 
+TMP_EXPORT_ASSETS_PATH = "d:/CRY_MIGRATE/___TMP_EXPORT/"
+MODELS_XML = TMP_EXPORT_ASSETS_PATH + 'models_list.xml'
+MATERIALS_XML = TMP_EXPORT_ASSETS_PATH + 'materials_list.xml'
+
+def xml_get(node, attr):
+	'''
+	Get attribute from xml node.
+	Return value or ''.
+	'''
+
+	res = node.get(attr)
+
+	if (res == None): return ""
+	return res
+
+def convert_suffixes_to_unigine(filename):
+	new_filename = ""
+
+	if (filename.endswith("_diff")):
+		base_filename = filename[:-5]
+		new_filename = base_filename + "_alb"
+
+	if (filename.endswith("_ddna")):
+		base_filename = filename[:-5]
+		new_filename = base_filename + "_n"
+	
+	if (filename.endswith("_spec")):
+		base_filename = filename[:-5]
+		new_filename = base_filename + "_s"
+
+	if (filename.endswith("_mask")):
+		base_filename = filename[:-5]
+		new_filename = base_filename + "_mask"
+	
+	if (filename.endswith("_detail")):
+		base_filename = filename[:-7]
+		new_filename = base_filename + "_detail"
+		pass
+	
+	if (filename.endswith("_sss")):
+		base_filename = filename[:-4]
+		new_filename = base_filename + "_sss"
+
+	if (filename.endswith("_displ")):
+		base_filename = filename[:-6]
+		new_filename = base_filename + "_h"
+
+	return new_filename
 
 # -----------------------------------------------------------------------------------------
 # Materials from xml.
@@ -36,7 +83,7 @@ def AssignTexture(node, tex_type, tex_path):
 
 		pass
 
-	texture_path = os.path.join(def_globals.DESTINATION_ASSETS_PATH, tex_path)
+	texture_path = os.path.join(tools.DESTINATION_ASSETS_PATH, tex_path)
 
 	if (node.name == "Albedo" and tex_type == "Diffuse"):
 		UpdateTextureNode(texture_path)
@@ -67,23 +114,23 @@ def CreateMaterialsFromXml(self, context, materials):
 	import xml.etree.ElementTree as ET
 
 	for path, mat in materials.items():
-		mat_name = def_globals.xml_get(mat, "name")
+		mat_name = xml_get(mat, "name")
 
 		mat_name = os.path.split(path)[1].replace(".mtl", "")
 		# print("Mat name: " + str(mat_name))
 		textures = []
 
 		for tex in mat.iter('Texture'):
-			texture_path_orig = def_globals.xml_get(tex, "file")
+			texture_path_orig = xml_get(tex, "file")
 			
 			texture_path = os.path.split(texture_path_orig)[0]
 			texture_name = os.path.split(texture_path_orig)[1]
 			
 			texture_name = texture_name.replace(".tif", "").replace(".tga", "")
-			texture_name = def_globals.convert_suffixes_to_unigine(texture_name)
+			texture_name = convert_suffixes_to_unigine(texture_name)
 			texture_name = texture_name + ".tga"
 
-			tex = [def_globals.xml_get(tex, "map"), texture_path + "\\" + texture_name]
+			tex = [xml_get(tex, "map"), texture_path + "\\" + texture_name]
 			textures.append(tex)
 		
 		new_mat = tools.CreateMaterialGeneric(self, context, obj = None, name = mat_name)
@@ -106,7 +153,7 @@ def RecreateMaterialFromXml(self, context):
 
 	materials = {}
 
-	tree = ET.parse(def_globals.MODELS_XML)
+	tree = ET.parse(MODELS_XML)
 	root = tree.getroot()
 
 	print("====================== FOUND MATS ======================")
@@ -114,11 +161,11 @@ def RecreateMaterialFromXml(self, context):
 
 	materials = {}
 
-	mat_tree = ET.parse(def_globals.MATERIALS_XML)
+	mat_tree = ET.parse(MATERIALS_XML)
 	mat_root = mat_tree.getroot()
 
 	for mat in mat_root.iter('Material'):
-		path_mat = def_globals.xml_get(mat, "mtl_file").lower().replace("/", "\\")
+		path_mat = xml_get(mat, "mtl_file").lower().replace("/", "\\")
 
 		if (not blend_folder in path_mat): continue
 		if (path_mat in materials.keys()): continue
