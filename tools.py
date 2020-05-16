@@ -31,7 +31,7 @@ def xml_prettify(elem):
 
 def GetDefaultResFolder():
 	'''
-	Get default textures for addon.
+	Get default folder for addon textures.
 	'''
 	import os
 	import sys
@@ -39,6 +39,15 @@ def GetDefaultResFolder():
 	textures_path = os.path.join(file_path, "default_resources") + "\\"
 
 	return textures_path
+
+
+def GetBlendFileFolderRelative():
+	import os
+	
+	blend_folder = os.path.dirname(bpy.data.filepath)
+	rel_blend_folder = blend_folder[blend_folder.find("models"):]
+
+	return rel_blend_folder
 
 
 def CreateTextureNode(mat_nodes, name = "Texture"):
@@ -76,36 +85,24 @@ def LoadDefaultTexture(node, tex_type):
 	if (tex_type == "Normals"): node.image.colorspace_settings.name = 'Non-Color'
 
 
-def GetPathFromImage(image, rel_blend_folder):
+def GetPathFromImage(image):
 	import os
 
-	image_path = image.filepath.replace("/", "\\").lower()
-	
-	if ("default_alb.tga" in image_path or "default_sh.tga" in image_path or "default_n.tga" in image_path):
-		return None
-	
-	proj_path = ART_ASSETS_PATH.replace("/", "\\").lower()
-	
-	if (proj_path in image_path):
-		image_path = image_path[len(proj_path):]
-		return image_path
+	# bpy.path.abspath(m_n.image, library=m_n.image.library)
+	image_path = bpy.path.abspath(image.filepath, library = image.library)
+	image_path = os.path.normpath(image_path)
 
-	image_path = image_path.replace("..", "")
-	for ch in image_path:
-		if (ch == "\\"):
-			image_path = image_path[1:]
-		else:
-			break
-		
-	print("\n Image path ==>   " + image_path)
-	# if (image_path.startswith("\\..\..\..\Textures")):
-	# if (".." in image_path):
-	# 	image_path = (image_path[image_path.find("textures"):]).replace("\\", "/")
-	# if (image_path.startswith("//")):
-	# 	image_path = os.path.join(rel_blend_folder, image_path[2:]).replace("\\", "/")
+	# print("\n Image path ==>   " + image_path)
+	
+	return image_path
 
-	# print("\n ==>   " + image_path)
-	# print(" ==>   " + proj_path)
+def GetPathRelativeFromImage(image):
+	full_path = GetPathFromImage(image)
+
+	art_path = ART_ASSETS_PATH.replace("/", "\\").lower()
+	
+	if (art_path in full_path.replace("/", "\\").lower()):
+		image_path = full_path[len(art_path):]
 	
 	return image_path
 
@@ -146,7 +143,7 @@ def UngMat_Texture(xml_root, image_node, type = "albedo", rel_blend_folder = "")
 	xml_child = ET.SubElement(xml_root, 'texture')
 	xml_child.set('name', type)
 	if (not image_node is None):
-		image_path = GetPathFromImage(image_node.image, rel_blend_folder)
+		image_path = GetPathRelativeFromImage(image_node.image)
 		if (image_path):
 			xml_child.text = image_path
 		else:
@@ -186,14 +183,16 @@ def UngMat_State(xml_root, param_name, param_value):
 	xml_child.text = param_value
 
 
-def CreateUnigineXmlMaterialGeneric(mat, mat_file_path, mat_name, rel_blend_folder):
+def CreateUnigineXmlMaterialGeneric(mat, mat_file_path, mat_name):
 	'''
 	Create unigine material and link existing textures.
 	'''
 
 	import xml.etree.ElementTree as ET
 	import os
-
+	
+	rel_blend_folder = GetBlendFileFolderRelative()
+	
 	xml_root = ET.Element('material')
 	
 	UngMat_Header(xml_root, mat_file_path, mat_name, "mesh_base")
@@ -236,13 +235,15 @@ def CreateUnigineXmlMaterialGeneric(mat, mat_file_path, mat_name, rel_blend_fold
 	pass
 
 
-def CreateUnigineXmlMaterialVertexBlend(mat, group, mat_file_path, mat_name, rel_blend_folder):
+def CreateUnigineXmlMaterialVertexBlend(mat, group, mat_file_path, mat_name):
 	'''
 	Create unigine material and link existing textures.
 	'''
 	import xml.etree.ElementTree as ET
 	import os
-
+	
+	rel_blend_folder = GetBlendFileFolderRelative()
+	
 	xml_root = ET.Element('material')
 	
 	UngMat_Header(xml_root, mat_file_path, mat_name, "base_mesh_vblend_4")
@@ -313,8 +314,7 @@ def CreateUnigineMaterials(self, context, mat = None):
 	import os
 
 	# paths
-	blend_folder = os.path.dirname(bpy.data.filepath)
-	rel_blend_folder = blend_folder[blend_folder.find("models"):]
+	rel_blend_folder = GetBlendFileFolderRelative()
 	full_path = os.path.normpath(os.path.join(DESTINATION_ASSETS_PATH, rel_blend_folder)).replace("\\", "/")
 	full_mat_path = os.path.normpath(os.path.join(full_path, "materials"))
 	mat_file_path = full_mat_path + "\\" + mat.name + ".mat"
@@ -322,10 +322,10 @@ def CreateUnigineMaterials(self, context, mat = None):
 	for node in mat.node_tree.nodes:
 		if (node.type != 'GROUP'): continue
 		if (node.node_tree.name == "MG_Generic"):
-			CreateUnigineXmlMaterialGeneric(mat, mat_file_path, mat.name, rel_blend_folder)
+			CreateUnigineXmlMaterialGeneric(mat, mat_file_path, mat.name)
 			break
 		if (node.node_tree.name == "MG_VertexBlend"):
-			CreateUnigineXmlMaterialVertexBlend(mat, node, mat_file_path, mat.name, rel_blend_folder)
+			CreateUnigineXmlMaterialVertexBlend(mat, node, mat_file_path, mat.name)
 			break
 
 	pass
@@ -585,14 +585,16 @@ def Debug_PrintMaterialNodes(self, context):
 	for m_n in mat_nodes:
 		print("============================================")
 		if (m_n.type == "TEX_IMAGE"):
-			print("Type: " + m_n.type + " Name: " + m_n.image.name + " Pos: " + str(m_n.location))
+			# image_path = GetPathFromImage(m_n.image)
+			image_path = GetPathRelativeFromImage(m_n.image)
+			print("Type: " + m_n.type + " Name: " + m_n.image.name + " Pos: " + str(m_n.location) + " Path: " + image_path)
 		else:
 			print("Type: " + m_n.type + " Name: " + m_n.name + " Pos: " + str(m_n.location))
 
 
 class UNIGINETOOLS_OT_CreateMaterialGeneric(bpy.types.Operator):
 	bl_label = "Create generic"
-	bl_idname = "uniginetools.creatematerialgeneric"
+	bl_idname = "uniginetools.create_material_generic"
 	bl_options = {'REGISTER', 'UNDO'}
 
 	@staticmethod
@@ -663,6 +665,64 @@ class UNIGINETOOLS_CreateMaterials(bpy.types.Menu):
 			text=UNIGINETOOLS_OT_CreateMaterialVertexBlend.bl_label)
 
 #  endregion
+
+# -----------------------------------------------------------------------------------------
+# Textures.
+# -----------------------------------------------------------------------------------------
+
+# region Textures
+
+def CopyTexturesToProject(self, context, mat):
+	import os
+	import shutil
+
+	mat_nodes = mat.node_tree.nodes
+	# mat_links = mat.node_tree.links
+
+	for node in mat_nodes:
+		if (not node.type == "TEX_IMAGE"): continue
+		if (node.image is None): continue
+
+		node_name = node.name.lower()
+		if ("albedo" in node_name or "shading" in node_name or "normals" in node_name):
+			image_path = GetPathRelativeFromImage(node.image)
+			if (image_path is None): continue
+
+			src_image_path = os.path.normpath(os.path.join(ART_ASSETS_PATH, image_path))
+			dst_image_path = os.path.normpath(os.path.join(DESTINATION_ASSETS_PATH, image_path))
+			if (not os.path.exists(src_image_path)): continue
+
+			# check date.
+			# if (os.path.exists(dst_image_path)):
+			# 	if (os.path.getmtime(src_image_path) > os.path.getmtime(dst_image_path)):
+			# 		shutil.copy2(src_image_path, dst_image_path)
+			# else:
+			# 	dst_dir = os.path.dirname(dst_image_path)
+			# 	if (not os.path.exists(dst_dir)): os.makedirs(dst_dir)
+			# 	shutil.copy2(src_image_path, dst_image_path)
+			
+			print("Image path: " + str(src_image_path) + " Date: " + str(os.path.getctime(src_image_path)))
+	pass
+
+
+class UNIGINETOOLS_OT_CopyTexturesToProject(bpy.types.Operator):
+	bl_label = "Copy textures to project"
+	bl_idname = "uniginetools.copy_textures_to_project"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		
+		for obj in bpy.context.selected_objects:
+			for slots in obj.material_slots:
+				mat = slots.material
+				if (mat is None): continue
+				CopyTexturesToProject(self, context, mat = mat)
+
+		self.report({'INFO'}, "ok")
+
+		return {'FINISHED'}
+
+# endregion
 
 # -----------------------------------------------------------------------------------------
 # Objects.
@@ -750,6 +810,7 @@ classes = (
 	UNIGINETOOLS_CreateMaterials,
 	UNIGINETOOLS_OT_DebugPrintMaterial,
 	UNIGINETOOLS_OT_CreateDefaultUILayout,
+	UNIGINETOOLS_OT_CopyTexturesToProject,
 )
 
 

@@ -62,7 +62,9 @@ class Addon_UI(bpy.types.Panel):
 		col = layout.column(align=True)
 		row = col.split(factor = 0.5)
 		row.operator(tools.UNIGINETOOLS_OT_CreateUnigineMaterial.bl_idname, text="Create Unigine mat")
-		# row.operator(tools.UNIGINETOOLS_OT_RecreateMaterialFromXml.bl_idname, text="Recreate mats")
+
+		row.operator(tools.UNIGINETOOLS_OT_CopyTexturesToProject.bl_idname, text="Copy textures")
+		
 
 
 		pass
