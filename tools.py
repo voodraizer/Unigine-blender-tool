@@ -88,23 +88,28 @@ def LoadDefaultTexture(node, tex_type):
 def GetPathFromImage(image):
 	import os
 
+	if (image is None): return None
+
 	# bpy.path.abspath(m_n.image, library=m_n.image.library)
 	image_path = bpy.path.abspath(image.filepath, library = image.library)
 	image_path = os.path.normpath(image_path)
 
-	# print("\n Image path ==>   " + image_path)
+	print("\n Image path ==>   " + image_path)
 	
 	return image_path
 
 def GetPathRelativeFromImage(image):
 	full_path = GetPathFromImage(image)
 
+	if (full_path is None): return None
+
 	art_path = ART_ASSETS_PATH.replace("/", "\\").lower()
 	
 	if (art_path in full_path.replace("/", "\\").lower()):
 		image_path = full_path[len(art_path):]
+		return image_path
 	
-	return image_path
+	return None
 
 #endregion
 
@@ -246,14 +251,14 @@ def CreateUnigineXmlMaterialVertexBlend(mat, group, mat_file_path, mat_name):
 	
 	xml_root = ET.Element('material')
 	
-	UngMat_Header(xml_root, mat_file_path, mat_name, "base_mesh_vblend_4")
+	UngMat_Header(xml_root, mat_file_path, mat_name, "base_mesh_vblend")
 
-	# group.inputs["Texture count"].default_value
+	mat_count = int(group.inputs["Texture count"].default_value)
 
 	# states.
 	UngMat_State(xml_root, "vertex_blend_enable", "1")
-	UngMat_State(xml_root, "vertex_color_blend_r", "1")
-	UngMat_State(xml_root, "vertex_color_blend_g", "1")
+	if (mat_count >= 2): UngMat_State(xml_root, "vertex_color_blend_r", "1")
+	if (mat_count >= 3): UngMat_State(xml_root, "vertex_color_blend_g", "1")
 
 	# textures.
 
@@ -266,31 +271,39 @@ def CreateUnigineXmlMaterialVertexBlend(mat, group, mat_file_path, mat_name):
 	UngMat_Texture(xml_root, image_node, "normal", rel_blend_folder)
 	
 	# set 2.
-	image_node = mat.node_tree.nodes.get("Albedo 2")
-	UngMat_Texture(xml_root, image_node, "albedo_blend_r", rel_blend_folder)
-	image_node = mat.node_tree.nodes.get("Shading 2")
-	UngMat_Texture(xml_root, image_node, "shading_blend_r", rel_blend_folder)
-	image_node = mat.node_tree.nodes.get("Normals 2")
-	UngMat_Texture(xml_root, image_node, "normal_blend_r", rel_blend_folder)
+	if (mat_count >= 2):
+		image_node = mat.node_tree.nodes.get("Albedo 2")
+		UngMat_Texture(xml_root, image_node, "albedo_blend_r", rel_blend_folder)
+		image_node = mat.node_tree.nodes.get("Shading 2")
+		UngMat_Texture(xml_root, image_node, "shading_blend_r", rel_blend_folder)
+		image_node = mat.node_tree.nodes.get("Normals 2")
+		UngMat_Texture(xml_root, image_node, "normal_blend_r", rel_blend_folder)
 
 	# set 3.
-	image_node = mat.node_tree.nodes.get("Albedo 3")
-	UngMat_Texture(xml_root, image_node, "albedo_blend_g", rel_blend_folder)
-	image_node = mat.node_tree.nodes.get("Shading 3")
-	UngMat_Texture(xml_root, image_node, "shading_blend_g", rel_blend_folder)
-	image_node = mat.node_tree.nodes.get("Normals 3")
-	UngMat_Texture(xml_root, image_node, "normal_blend_g", rel_blend_folder)
+	if (mat_count >= 3):
+		image_node = mat.node_tree.nodes.get("Albedo 3")
+		UngMat_Texture(xml_root, image_node, "albedo_blend_g", rel_blend_folder)
+		image_node = mat.node_tree.nodes.get("Shading 3")
+		UngMat_Texture(xml_root, image_node, "shading_blend_g", rel_blend_folder)
+		image_node = mat.node_tree.nodes.get("Normals 3")
+		UngMat_Texture(xml_root, image_node, "normal_blend_g", rel_blend_folder)
+
+	# mask.
+	image_node = mat.node_tree.nodes.get("Mask")
+	UngMat_Texture(xml_root, image_node, "mask_blend", rel_blend_folder)
 
 	# parameters.
-	UngMat_Parameter(xml_root, "blend_factor_r", '%.3f' % group.inputs["Blend factor (R)"].default_value)
-	UngMat_Parameter(xml_root, "blend_falloff_r", '%.3f' % group.inputs["Blend fallof (R)"].default_value)
-	UngMat_Parameter(xml_root, "blend_alpha_r", '%.3f' % group.inputs["Blend alpha (R)"].default_value)
-	UngMat_Parameter(xml_root, "blend_normals_r", '%.3f' % group.inputs["Blend normal (R)"].default_value)
+	if (mat_count >= 2):
+		UngMat_Parameter(xml_root, "blend_factor_r", '%.3f' % group.inputs["Blend factor (R)"].default_value)
+		UngMat_Parameter(xml_root, "blend_falloff_r", '%.3f' % group.inputs["Blend fallof (R)"].default_value)
+		UngMat_Parameter(xml_root, "blend_alpha_r", '%.3f' % group.inputs["Blend alpha (R)"].default_value)
+		UngMat_Parameter(xml_root, "blend_normals_r", '%.3f' % group.inputs["Blend normal (R)"].default_value)
 
-	UngMat_Parameter(xml_root, "blend_factor_g", '%.3f' % group.inputs["Blend factor (G)"].default_value)
-	UngMat_Parameter(xml_root, "blend_falloff_g", '%.3f' % group.inputs["Blend fallof (G)"].default_value)
-	UngMat_Parameter(xml_root, "blend_alpha_g", '%.3f' % group.inputs["Blend alpha (G)"].default_value)
-	UngMat_Parameter(xml_root, "blend_normals_g", '%.3f' % group.inputs["Blend normal (G)"].default_value)
+	if (mat_count >= 3):
+		UngMat_Parameter(xml_root, "blend_factor_g", '%.3f' % group.inputs["Blend factor (G)"].default_value)
+		UngMat_Parameter(xml_root, "blend_falloff_g", '%.3f' % group.inputs["Blend fallof (G)"].default_value)
+		UngMat_Parameter(xml_root, "blend_alpha_g", '%.3f' % group.inputs["Blend alpha (G)"].default_value)
+		UngMat_Parameter(xml_root, "blend_normals_g", '%.3f' % group.inputs["Blend normal (G)"].default_value)
 
 	UngMat_Parameter(xml_root, "dirt_alpha", '%.3f' % group.inputs["Dirt alpha"].default_value)
 	UngMat_Parameter(xml_root, "dirt_roughness_coeff", '%.3f' % group.inputs["Dirt roughness"].default_value)
@@ -421,6 +434,11 @@ def CreateMaterialGeneric(self, context, obj = None, mat_name = ""):
 	texture.location = (-585, -47)
 	LoadDefaultTexture(texture, "Normals")
 	mat_links.new(texture.outputs['Color'], node_group.inputs['Normals'])
+
+
+	mat.use_backface_culling = True
+	# mat.blend_method = 'CLIP'
+	mat.alpha_threshold = 0.2
 
 
 	return mat
@@ -572,6 +590,8 @@ def CreateMaterialVertexBlend(self, context, obj = None, mat_name = ""):
 	LoadDefaultTexture(texture, "Normals")
 	mat_links.new(texture.outputs['Color'], node_group.inputs['Normals 3'])
 
+	mat.use_backface_culling = True
+
 	return mat
 
 
@@ -676,6 +696,8 @@ def CopyTexturesToProject(self, context, mat):
 	import os
 	import shutil
 
+	textures = []
+
 	mat_nodes = mat.node_tree.nodes
 	# mat_links = mat.node_tree.links
 
@@ -684,7 +706,7 @@ def CopyTexturesToProject(self, context, mat):
 		if (node.image is None): continue
 
 		node_name = node.name.lower()
-		if ("albedo" in node_name or "shading" in node_name or "normals" in node_name):
+		if ("albedo" in node_name or "shading" in node_name or "normals" in node_name or "mask" in node_name):
 			image_path = GetPathRelativeFromImage(node.image)
 			if (image_path is None): continue
 
@@ -693,32 +715,53 @@ def CopyTexturesToProject(self, context, mat):
 			if (not os.path.exists(src_image_path)): continue
 
 			# check date.
-			# if (os.path.exists(dst_image_path)):
-			# 	if (os.path.getmtime(src_image_path) > os.path.getmtime(dst_image_path)):
-			# 		shutil.copy2(src_image_path, dst_image_path)
-			# else:
-			# 	dst_dir = os.path.dirname(dst_image_path)
-			# 	if (not os.path.exists(dst_dir)): os.makedirs(dst_dir)
-			# 	shutil.copy2(src_image_path, dst_image_path)
-			
-			print("Image path: " + str(src_image_path) + " Date: " + str(os.path.getctime(src_image_path)))
-	pass
+			if (os.path.exists(dst_image_path)):
+				if (os.path.getmtime(src_image_path) > os.path.getmtime(dst_image_path)):
+					shutil.copy2(src_image_path, dst_image_path)
 
+					textures.append(dst_image_path)
+			else:
+				dst_dir = os.path.dirname(dst_image_path)
+				if (not os.path.exists(dst_dir)): os.makedirs(dst_dir)
+				shutil.copy2(src_image_path, dst_image_path)
+
+				textures.append(dst_image_path)
+			
+			
+			# print("Image path: " + str(src_image_path) + " Date: " + str(os.path.getctime(src_image_path)))
+	return textures
+
+
+message = []
 
 class UNIGINETOOLS_OT_CopyTexturesToProject(bpy.types.Operator):
 	bl_label = "Copy textures to project"
 	bl_idname = "uniginetools.copy_textures_to_project"
 	bl_options = {'REGISTER', 'UNDO'}
 
+	@staticmethod
+	def draw_func(self, context):
+		for m in message:
+			self.layout.label(text = m)
+
 	def execute(self, context):
 		
+		all_textures = []
+
 		for obj in bpy.context.selected_objects:
 			for slots in obj.material_slots:
 				mat = slots.material
 				if (mat is None): continue
-				CopyTexturesToProject(self, context, mat = mat)
 
-		self.report({'INFO'}, "ok")
+				textures = CopyTexturesToProject(self, context, mat = mat)
+				all_textures.extend(textures)
+				
+		global message
+		message = all_textures
+		
+		bpy.context.window_manager.popup_menu(self.draw_func, title="Сopied textures")
+
+		# self.report({'INFO'}, "ok")
 
 		return {'FINISHED'}
 
